@@ -1,8 +1,24 @@
-# 🐱 XiaogePet — Desktop AI Companion Agent
+# 🐱 Desktop AI Companion Agent
 
 **A desktop AI pet that actually *lives* with you — proactive, memory-aware, and powered by a full Agent stack.**
 
 > Built with Python + PyQt5 + LLM (Function Calling) + RAG + TTS. Not just a widget — a real Agent system with long-term memory, tool use, and proactive behavior.
+
+![Demo Actions](docs/demo_actions.gif)
+
+---
+
+## 🎯 Why This Project
+
+Most "AI desktop pets" are either pre-scripted widgets or simple chatbots wrapped in a sprite. This project is a **full Agent implementation** that demonstrates every layer of a production AI agent:
+
+| Layer | Implementation |
+|-------|---------------|
+| **Perception** | User input + system state (idle time, active window, time of day) |
+| **Memory** | RAG vector store (character lore) + JSON user memory (auto-extracted) + 10-turn context |
+| **Planning** | Function Calling decision engine + proactive behavior state machine |
+| **Action** | 5+ tools (time, reminders, screenshot, app launch) + 13 animated actions + TTS voice |
+| **Feedback** | User memory extraction every 3 turns + knowledge base hot-reload |
 
 ---
 
@@ -36,53 +52,97 @@
 
 ## 🏗️ Architecture
 
-```
-┌──────────────────────────────────────────────────────────┐
-│                    pet_agent.py (Main)                    │
-│          PyQt5 Window · 13 Actions · Window Climbing      │
-├──────────────┬───────────────┬───────────┬───────────────┤
-│  Bubble.py   │  ChatWindow   │  tts.py   │ proactive.py  │
-│  (Speech)    │  (Input UI)   │  (Voice)  │ (Auto-talk)   │
-├──────────────┴───────────────┴───────────┴───────────────┤
-│                   agent_core.py (Brain)                    │
-│  ┌─────────┐  ┌──────────┐  ┌───────────┐  ┌──────────┐ │
-│  │   RAG   │  │   Tool   │  │  Character │  │   User   │ │
-│  │   KB    │  │  Registry│  │  Builder   │  │  Memory  │ │
-│  └────┬────┘  └────┬─────┘  └─────┬─────┘  └────┬─────┘ │
-│       │            │              │              │       │
-│  ┌────▼────┐  ┌────▼─────┐  ┌─────▼─────┐  ┌────▼─────┐ │
-│  │knowledge│  │  tools/  │  │    llm/   │  │  memory/  │ │
-│  │ _base.py│  │  time_   │  │ character_│  │user_memory│ │
-│  │         │  │  tools.py│  │  builder  │  │  _extract │ │
-│  └─────────┘  │  system_ │  │           │  └──────────┘ │
-│               │  tools.py │  └───────────┘               │
-│               └──────────┘                               │
-├──────────────────────────────────────────────────────────┤
-│              llm_client.py (LLM API Client)               │
-│         Function Calling + Context Memory + RAG           │
-└──────────────────────────────────────────────────────────┘
+### System Overview
+
+```mermaid
+graph TB
+    subgraph UI["Desktop UI Layer (PyQt5)"]
+        Main["pet_agent.py<br/>Main Window · 13 Actions · Window Climbing"]
+        Bubble["bubble.py<br/>Speech Bubble"]
+        Chat["chat_window.py<br/>Chat Input"]
+    end
+
+    subgraph Agent["Agent Core Layer"]
+        Brain["agent_core.py<br/>Agent Brain (Orchestrator)"]
+        LLM["llm_client.py<br/>LLM API Client<br/>(Function Calling + Context)"]
+        Proactive["proactive.py<br/>Proactive Behavior Engine"]
+    end
+
+    subgraph Memory["Memory Layer"]
+        RAG["knowledge_base.py<br/>RAG Vector Store (ChromaDB)"]
+        UserMem["user_memory.py<br/>User Long-Term Memory (JSON)"]
+        Extractor["memory_extractor.py<br/>Auto-Extract User Info"]
+    end
+
+    subgraph Tools["Tool Layer"]
+        TimeTools["time_tools.py<br/>Get Time · Set Reminder"]
+        SysTools["system_tools.py<br/>Idle Check · Screenshot · App Launch"]
+        Lunar["lunar.py<br/>Lunar Calendar"]
+    end
+
+    subgraph Character["Character Layer"]
+        Builder["character_builder.py<br/>8-Dim Profile Generator"]
+        TTS["tts.py<br/>CosyVoice → edge-tts"]
+    end
+
+    User["👤 User"] -->|Click/Drag/Chat| Main
+    Main -->|Messages| Brain
+    Brain -->|API Calls| LLM
+    Brain -->|Retrieve| RAG
+    Brain -->|Read/Write| UserMem
+    Brain -->|Execute| TimeTools
+    Brain -->|Execute| SysTools
+    Brain -->|Execute| Lunar
+    Brain -->|Generate| Builder
+    Brain -->|Speak| TTS
+    Proactive -->|Trigger| Brain
+    Extractor -->|Every 3 turns| UserMem
+    LLM -->|Function Call| Tools
 ```
 
-### Agent Core Pipeline
+### Agent Decision Pipeline
 
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant UI as Desktop UI
+    participant A as Agent Core
+    participant L as LLM (GLM-5)
+    participant R as RAG Memory
+    participant T as Tools
+    participant M as User Memory
+
+    U->>UI: "What time is it?"
+    UI->>A: Forward message
+    A->>R: Vector search (Top-K)
+    R-->>A: Relevant character lore
+    A->>M: Inject user memory
+    A->>L: Prompt + System + RAG + Tools schema
+    L-->>A: Function Call: get_current_time()
+    A->>T: Execute get_current_time()
+    T-->>A: "2026-09-01 14:30"
+    A->>L: Tool result + Prompt
+    L-->>A: In-character reply
+    A->>UI: Display bubble + TTS
+    A->>M: Async: extract user info
 ```
-User Message
-    │
-    ▼
-┌─ RAG Retrieval ──── Vector search (Top-K) in character knowledge base
-│                      → Inject relevant lore as context
-│
-├─ System Context ──── Tool usage hints + User memory + RAG context
-│                      + Character System Prompt
-│
-├─ Function Calling ── LLM decides: direct reply OR call a tool
-│                      Tools: time, reminder, idle check, screenshot, app launch
-│
-├─ Memory Extract ──── Async: LLM extracts user info from conversation
-│                      → Persists to user_memory.json
-│
-└─ Proactive ───────── Timer-based: health reminders, follow-up questions,
-                       mood check-ins (skipped at night 23:00-08:00)
+
+### Proactive Behavior Flow
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Check: Timer (60s)
+    Check --> Idle: Night silence (23:00-08:00)
+    Check --> Evaluate: Daytime
+    Evaluate --> HealthReminder: Idle > 30min
+    Evaluate --> MoodCheck: 2h since last chat
+    Evaluate --> FollowUp: User mentioned event earlier
+    Evaluate --> TimeReport: On the hour
+    HealthReminder --> Idle: Speak + Action
+    MoodCheck --> Idle: Ask question
+    FollowUp --> Idle: Reference memory
+    TimeReport --> Idle: Announce time
 ```
 
 ---
@@ -128,41 +188,86 @@ pet/
 
 ## 🚀 Quick Start
 
-### Option 1: Run from source (recommended for development)
+### Prerequisites
+
+- Python 3.9+
+- Windows 10/11 (uses Win32 API for window climbing)
+- An OpenAI-compatible LLM API key (tested with Alibaba Cloud GLM-5)
+- (Optional) Alibaba Cloud CosyVoice API key for premium TTS
+
+### Option 1: Run from Source (Recommended)
 
 ```bash
-# Clone
-git clone https://github.com/yourusername/xiaoge-pet.git
-cd xiaoge-pet
+# 1. Clone the repository
+git clone https://github.com/lgg1234567890/desktop-agent-companion.git
+cd desktop-agent-companion
 
-# Install dependencies
-pip install PyQt5 pywin32 Pillow requests certifi chromadb edge-tts
+# 2. Create virtual environment
+python -m venv .venv
+.venv\Scripts\activate  # Windows
+# source .venv/bin/activate  # Linux/Mac
 
-# Configure your LLM API
-# Edit config.py or create api_config.json:
+# 3. Install dependencies
+pip install -r requirements.txt
+
+# 4. Configure API
+cp .env.example api_config.json
+# Edit api_config.json with your API key:
 # {
 #   "api_key": "sk-your-key",
 #   "api_url": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
 #   "model": "glm-5"
 # }
 
-# Run
+# 5. Run
 python pet_agent.py
 ```
 
+The pet appears in the bottom-right corner of your screen.
+
 ### Option 2: Standalone EXE
 
-Download the latest release, double-click `XiaogePet.exe`. Pet appears in bottom-right corner.
+Download the latest release from the [Releases](https://github.com/lgg1234567890/desktop-agent-companion/releases) page.
+
+1. Extract `XiaogePet.zip`
+2. Double-click `XiaogePet.exe`
+3. Right-click pet → Settings → Enter your API key
+4. Restart the app
 
 ### Controls
 
 | Action | Effect |
 |--------|--------|
-| **Click** pet | Cycle through 13 actions |
-| **Double-click** pet | Open chat input |
-| **Drag** pet | Move; drag to window edge → climb/sit |
-| **Scroll** | Resize pet |
-| **Right-click** pet | Menu: select action / walk here / settings / quit |
+| **Click** pet | Cycle through 13 actions (idle, walk, sit, jump, etc.) |
+| **Double-click** pet | Open chat input dialog |
+| **Drag** pet | Move around; drag to window edge → climb/sit on border |
+| **Scroll** | Resize pet (larger/smaller) |
+| **Right-click** pet | Context menu: select action / walk here / character settings / quit |
+
+### Configuration
+
+All settings are in `api_config.json` (created on first run):
+
+```json
+{
+  "api_key": "sk-xxx",
+  "api_url": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+  "model": "glm-5",
+  "tts_enabled": true,
+  "proactive_enabled": true,
+  "proactive_interval": 60
+}
+```
+
+### Troubleshooting
+
+| Problem | Solution |
+|---------|----------|
+| Pet doesn't appear | Check Windows Defender didn't quarantine; run as Administrator |
+| No voice | Ensure `tts_enabled: true`; CosyVoice key optional, edge-tts is fallback |
+| API errors | Verify `api_key` and `api_url` in `api_config.json`; test with `python test_api.py` |
+| RAG not working | Delete `data/vector_db/` to rebuild index; ensure embedding API is configured |
+| High CPU usage | Disable proactive behavior in settings; increase interval to 300s |
 
 ---
 
