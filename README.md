@@ -52,6 +52,46 @@ Most "AI desktop pets" are either pre-scripted widgets or simple chatbots wrappe
 
 ## 🏗️ Architecture
 
+### Multi-Agent Collaboration (v2.0)
+
+The project uses a **three-agent collaboration architecture**, not a single monolithic agent:
+
+```mermaid
+graph TB
+    User["👤 User Message"] --> Planner["🧠 Planner Agent<br/>(主控规划)"]
+    
+    Planner -->|"检索记忆"| Memory["📚 Memory Agent<br/>(记忆管理)"]
+    Planner -->|"执行工具"| Tool["🔧 Tool Agent<br/>(工具执行)"]
+    
+    Memory -->|"RAG上下文"| Planner
+    Tool -->|"工具结果"| Planner
+    
+    Planner -->|"角色化回复"| UI["🖥️ Desktop UI<br/>(气泡+动作+TTS)"]
+    
+    subgraph MemoryAgent["Memory Agent"]
+        RAG["RAG Vector Store<br/>(ChromaDB)"]
+        UserMem["User Long-Term Memory<br/>(JSON)"]
+    end
+    
+    subgraph ToolAgent["Tool Agent"]
+        Time["get_current_time"]
+        Reminder["set_reminder"]
+        Idle["check_idle_time"]
+        Screen["take_screenshot"]
+        App["open_application"]
+    end
+```
+
+**Agent Responsibilities:**
+
+| Agent | Responsibility | Key Methods |
+|-------|---------------|-------------|
+| **Planner Agent** | Understand user intent, coordinate sub-agents, generate final reply | `run()`, `_chat_with_tools()` |
+| **Memory Agent** | RAG knowledge retrieval, user memory read/write, context building | `retrieve_knowledge()`, `get_user_context()`, `save_memory()` |
+| **Tool Agent** | Tool registry management, tool execution, call history | `execute_tool()`, `get_schemas()`, `list_tools()` |
+
+**Communication:** Agents communicate via structured `AgentMessage` objects (sender, receiver, action, payload). The Planner Agent uses Function Calling to decide when to invoke Memory or Tool agents.
+
 ### System Overview
 
 ```mermaid
@@ -152,7 +192,8 @@ stateDiagram-v2
 ```
 pet/
 ├── pet_agent.py              # Main app: window, interactions, state machine
-├── agent_core.py             # Agent brain: RAG + Tools + Memory + Character
+├── agent_core.py             # Agent core: multi-agent orchestrator (Planner+Memory+Tool)
+├── server.py                 # FastAPI server: REST API for multi-client access
 ├── llm_client.py             # LLM API client (Function Calling + context)
 ├── proactive.py              # Proactive behavior engine
 ├── bubble.py                 # Speech bubble UI
@@ -163,6 +204,11 @@ pet/
 ├── config.py                 # Global config (size, speed, timers)
 ├── window_manager.py         # Win32 window enumeration + climb detection
 ├── tts.py                    # TTS engine (CosyVoice → edge-tts fallback)
+├── agents/                   # 🆕 Multi-Agent collaboration system
+│   ├── base_agent.py         # Agent base class + message protocol
+│   ├── planner_agent.py      # 🧠 Planner Agent: intent understanding + orchestration
+│   ├── memory_agent.py       # 📚 Memory Agent: RAG retrieval + user memory
+│   └── tool_agent.py         # 🔧 Tool Agent: tool execution + registry
 ├── llm/
 │   └── character_builder.py  # LLM 8-dimension character profile generator
 ├── memory/
@@ -181,6 +227,8 @@ pet/
 │   ├── knowledge/            # Character knowledge .txt files (RAG source)
 │   └── vector_db/            # ChromaDB persistent storage
 ├── assets/                   # 17 transparent PNG action sprites
+├── docs/                     # Documentation + demo assets
+│   └── demo_actions.gif      # Demo animation
 └── api_config.json           # (Optional) API configuration
 ```
 
@@ -268,6 +316,60 @@ All settings are in `api_config.json` (created on first run):
 | API errors | Verify `api_key` and `api_url` in `api_config.json`; test with `python test_api.py` |
 | RAG not working | Delete `data/vector_db/` to rebuild index; ensure embedding API is configured |
 | High CPU usage | Disable proactive behavior in settings; increase interval to 300s |
+
+---
+
+## 🌐 Server API (Multi-Agent Service)
+
+The Agent core can run as a **FastAPI service**, enabling multi-client access (desktop, web, mobile).
+
+### Start the Server
+
+```bash
+# Install server dependencies
+pip install fastapi uvicorn pydantic
+
+# Start server
+python server.py
+# or
+uvicorn server:app --host 0.0.0.0 --port 8000
+```
+
+API documentation: **http://localhost:8000/docs** (Swagger UI)
+
+### API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/` | Service health check |
+| `GET` | `/api/status` | Agent system status + multi-agent stats |
+| `POST` | `/api/chat` | Send message, get reply (with RAG + tools) |
+| `GET` | `/api/memory` | Get user memory context + stats |
+| `POST` | `/api/memory` | Save user memory manually |
+| `GET` | `/api/characters` | List saved characters |
+| `POST` | `/api/characters/generate` | Generate new character via LLM |
+| `POST` | `/api/characters/load` | Load saved character |
+| `POST` | `/api/history/clear` | Clear conversation history |
+| `GET` | `/api/tools` | List available tools + schemas |
+| `GET` | `/api/agents/status` | Multi-agent collaboration status |
+
+### Example: Chat via API
+
+```bash
+curl -X POST http://localhost:8000/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "What time is it?", "use_rag": true, "use_tools": true}'
+```
+
+Response:
+```json
+{
+  "reply": "现在是下午2点30分。",
+  "success": true,
+  "tools_used": [{"name": "get_current_time", "args": {}, "result": "..."}],
+  "memory_context": "..."
+}
+```
 
 ---
 

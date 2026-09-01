@@ -215,5 +215,35 @@ class LLMClient:
                 break
         return last_reply or "（工具调用次数超限）", True, called_tools
 
+    def _raw_chat_with_tools(self, messages, tools, temperature=0.7, max_tokens=500):
+        """
+        底层Function Calling接口：直接传入messages和tools，返回原始响应
+        供PlannerAgent等多Agent协作场景使用
+        返回响应字典或None
+        """
+        self._load_config()
+        if not self.api_key or not self.api_url:
+            return None
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            }
+            payload = {
+                "model": self.model,
+                "messages": messages,
+                "tools": tools,
+                "tool_choice": "auto",
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+            }
+            resp = requests.post(self.api_url, headers=headers, json=payload, timeout=LLM_TIMEOUT)
+            if resp.status_code != 200:
+                return None
+            data = resp.json()
+            return data["choices"][0]
+        except Exception:
+            return None
+
     def clear_history(self):
         self.history = []
