@@ -4,6 +4,12 @@
 
 > Built with Python + PyQt5 + LLM (Function Calling) + RAG + TTS. Not just a widget — a real Agent system with long-term memory, tool use, and proactive behavior.
 
+## 🎬 Demo Video
+
+[![Watch Demo](docs/demo_actions.gif)](https://github.com/lgg1234567890/desktop-agent-companion/raw/master/docs/demo_video.mp4)
+
+*Click the GIF to watch the 10s demo video — actions, chat bubbles, and Agent features (RAG · Function Calling · Multi-Agent · Proactive · TTS)*
+
 ![Demo Actions](docs/demo_actions.gif)
 
 ---
