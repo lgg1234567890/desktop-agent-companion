@@ -1,0 +1,74 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+dist_new/
+dist_final/
+dist_v2/
+dist_v3/
+dist_v4/
+dist_v5/
+build/
+build_new/
+build_final/
+build_v2/
+build_v3/
+build_v4/
+build_v5/
+*.spec
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Logs
+*.log
+pet_debug.log
+tts_debug.log
+exe_error.txt
+exe_output.txt
+
+# Sensitive config (contains API keys)
+api_config.json
+character_prompt.txt
+character_settings.txt
+
+# Data (generated at runtime)
+data/vector_db/
+data/user_memory.json
+data/character_profiles/
+
+# Build artifacts
+*.exe
+
+# Test artifacts
+test_*.pyc
+*.mp3
+
+# Resume/debug files (not part of project)
+resume*.pdf
+resume*.png
+*preview*.png
+block_screenshot.png
+error_screenshot.png
+screenshot.png
+generate_*resume*.py
+generate_pdf*.py
+read_resume.py
+xiaoge_pet.py
+version_info.txt
